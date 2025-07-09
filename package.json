@@ -1,0 +1,33 @@
+{
+   "name": "rag-cli-system",
+  "version": "1.0.0",
+  "description": "RAG CLI System for document searching",
+  "main": "src/app.js",
+  "bin": {
+    "rag-cli-system": "./src/app.js"
+  },
+  "scripts": {
+    "start": "node src/app.js"
+  },
+  "pkg": {
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "keywords": [
+    "RAG",
+    "CLI",
+    "Node.js",
+    "TF-IDF",
+    "similarity search"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "type": "commonjs"
+}
