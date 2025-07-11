@@ -65,13 +65,21 @@ function showHelp() {
 
 // ========== 前処理関数 ==========
 function preprocessTextAdvanced(text) {
-    return text.replace(/[^a-zA-Z0-9ぁ-んァ-ヶヷ-ヺー一-龥、。！？\s.,!?]/g, '')
-               .replace(/\s+/g, ' ')
-               .trim();
+    console.log('🔄 前処理開始...');
+    console.log(`📝 元テキスト長: ${text.length}文字`);
+    
+    const cleaned = text.replace(/[^a-zA-Z0-9ぁ-んァ-ヶヷ-ヺー一-龥、。！？\s.,!?]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+    
+    console.log(`✅ 前処理完了: ${cleaned.length}文字`);
+    return cleaned;
 }
 
 // ========== トークン化関数 ==========
 function getTokensAdvanced(text, options = {}) {
+    console.log('🔧 高精度トークン化開始...');
+    
     const {
         useStopwords = true,
         katakanaWeight = 1.5,
@@ -83,6 +91,8 @@ function getTokensAdvanced(text, options = {}) {
     
     // 英単語（ストップワード除去オプション）
     const englishWords = clean.match(/\b[a-zA-Z]{2,}\b/g) || [];
+    console.log(`📝 英単語抽出: ${englishWords.length}個`);
+    
     englishWords.forEach(word => {
         const lower = word.toLowerCase();
         if (!useStopwords || !STOPWORDS_EN.has(lower)) {
@@ -95,10 +105,13 @@ function getTokensAdvanced(text, options = {}) {
     
     // 数字（年号、バージョン等重要）
     const numbers = clean.match(/\d+/g) || [];
+    console.log(`🔢 数字抽出: ${numbers.length}個`);
     tokens.push(...numbers);
     
     // カタカナ語（技術用語として重要度高）
     const katakanaWords = clean.match(/[ァ-ヶー]{2,}/g) || [];
+    console.log(`🈯 カタカナ語抽出: ${katakanaWords.length}個`);
+    
     katakanaWords.forEach(word => {
         // カタカナ重み適用
         for (let i = 0; i < Math.round(katakanaWeight); i++) {
@@ -108,6 +121,8 @@ function getTokensAdvanced(text, options = {}) {
     
     // 漢字列（意味のある単語として抽出）
     const kanjiSequences = clean.match(/[一-龥]{1,}/g) || [];
+    console.log(`🈴 漢字列抽出: ${kanjiSequences.length}個`);
+    
     kanjiSequences.forEach(seq => {
         if (!useStopwords || !STOPWORDS_JP.has(seq)) {
             tokens.push(seq);
@@ -116,14 +131,20 @@ function getTokensAdvanced(text, options = {}) {
     
     // 日本語N-gram（2-4文字、重複制御）
     const japanese = clean.replace(/[a-zA-Z0-9\s.,!?、。！？]/g, '');
+    let ngramCount = 0;
+    
     for (let n = 2; n <= 4; n++) {
         for (let i = 0; i <= japanese.length - n; i++) {
             const ngram = japanese.substring(i, i + n);
             if (!useStopwords || !STOPWORDS_JP.has(ngram)) {
                 tokens.push(ngram);
+                ngramCount++;
             }
         }
     }
+    
+    console.log(`📊 N-gram生成: ${ngramCount}個`);
+    console.log(`✅ トークン化完了: ${tokens.length}個のトークン`);
     
     return tokens;
 }
@@ -148,22 +169,38 @@ function getTokensBasic(text) {
 // ========== TF-IDF計算 ==========
 function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {}) {
     const startTime = Date.now();
+    console.log('🧮 TF-IDF計算開始...');
     
     const useL2Norm = options.useL2Norm !== false;
     const useImprovedIDF = options.useImprovedIDF !== false;
     
+    console.log(`📊 設定: L2正規化=${useL2Norm}, 改良IDF=${useImprovedIDF}`);
+    
     // 全文書とクエリのトークン化
+    console.log('🔤 全文書のトークン化中...');
     const allTexts = [...documents, query];
-    const allTokens = allTexts.map(text => tokenizerFunction(text, options));
+    const allTokens = allTexts.map((text, index) => {
+        if (index === allTexts.length - 1) {
+            console.log('🔍 クエリのトークン化中...');
+        } else {
+            console.log(`📄 文書${index + 1}のトークン化中...`);
+        }
+        return tokenizerFunction(text, options);
+    });
     
     // 語彙構築
+    console.log('📚 語彙構築中...');
     const vocabulary = [...new Set(allTokens.flat())];
     const vocabSize = vocabulary.length;
+    console.log(`✅ 語彙サイズ: ${vocabSize}`);
     
     // TF計算
-    const tfidfVectors = allTokens.map(tokens => {
+    console.log('📈 TF値計算中...');
+    const tfidfVectors = allTokens.map((tokens, index) => {
         const tf = {};
         const totalTokens = tokens.length;
+        
+        console.log(`  文書${index + 1}: ${totalTokens}トークン`);
         
         tokens.forEach(token => {
             tf[token] = (tf[token] || 0) + 1;
@@ -180,11 +217,29 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
     });
     
     // IDF計算
+    console.log('📉 IDF値計算中...');
     const idf = {};
     const docCount = allTexts.length;
+    let processedTerms = 0;
     
-    vocabulary.forEach(token => {
-        const df = allTokens.filter(tokens => tokens.includes(token)).length;
+    // 最適化：Map を使用してDocumentFrequencyを計算
+    const documentFrequency = new Map();
+    
+    console.log('  文書頻度計算中...');
+    allTokens.forEach((tokens, docIndex) => {
+        const uniqueTokens = new Set(tokens);
+        uniqueTokens.forEach(token => {
+            documentFrequency.set(token, (documentFrequency.get(token) || 0) + 1);
+        });
+        
+        if (docIndex % 10 === 0) {
+            console.log(`    文書進行状況: ${docIndex + 1}/${allTokens.length}`);
+        }
+    });
+    
+    console.log('  IDF値計算中...');
+    vocabulary.forEach((token, index) => {
+        const df = documentFrequency.get(token) || 1;
         
         if (useImprovedIDF) {
             // Smooth IDF: log((N + 1) / (df + 1)) + 1
@@ -193,24 +248,57 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
             // Standard IDF
             idf[token] = Math.log(docCount / df);
         }
+        
+        processedTerms++;
+        if (processedTerms % 15000 === 0) {
+            console.log(`    語彙進行状況: ${processedTerms}/${vocabulary.length}語 (${(processedTerms/vocabulary.length*100).toFixed(1)}%)`);
+        }
     });
     
-    // TF-IDFベクトル作成
-    const vectors = tfidfVectors.map(tf => {
-        const vector = vocabulary.map(token => (tf[token] || 0) * idf[token]);
+    console.log('✅ IDF値計算完了');
+    
+    // TF-IDFベクトル作成（メモリ効率化）
+    console.log('🔢 TF-IDFベクトル作成中...');
+    const vectors = [];
+    
+    for (let docIndex = 0; docIndex < tfidfVectors.length; docIndex++) {
+        const tf = tfidfVectors[docIndex];
+        console.log(`  文書${docIndex + 1}/${tfidfVectors.length}のベクトル作成中...`);
         
-        // L2正規化
-        if (useL2Norm) {
-            const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-            if (magnitude > 0) {
-                return vector.map(val => val / magnitude);
+        // スパースベクトル形式で作成（0でない値のみ保持）
+        const sparseVector = new Map();
+        let magnitude = 0;
+        
+        // 非零要素のみ計算
+        for (const token in tf) {
+            if (tf[token] > 0) {
+                const tfidfValue = tf[token] * idf[token];
+                if (tfidfValue > 0) {
+                    sparseVector.set(token, tfidfValue);
+                    magnitude += tfidfValue * tfidfValue;
+                }
             }
         }
         
-        return vector;
-    });
+        // L2正規化
+        if (useL2Norm && magnitude > 0) {
+            magnitude = Math.sqrt(magnitude);
+            for (const [token, value] of sparseVector) {
+                sparseVector.set(token, value / magnitude);
+            }
+        }
+        
+        vectors.push(sparseVector);
+        
+        // メモリ使用量を定期的に報告
+        if (docIndex % 10 === 0) {
+            const memUsage = process.memoryUsage();
+            console.log(`    メモリ使用量: ${(memUsage.heapUsed / 1024 / 1024).toFixed(1)}MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(1)}MB`);
+        }
+    }
     
     const preprocessingTime = Date.now() - startTime;
+    console.log(`✅ TF-IDF計算完了: ${preprocessingTime}ms`);
     
     return {
         vectors: vectors,
@@ -218,12 +306,31 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
         vocabSize: vocabSize,
         preprocessingTime: preprocessingTime,
         queryVector: vectors[vectors.length - 1],
-        docVectors: vectors.slice(0, -1)
+        docVectors: vectors.slice(0, -1),
+        isSparse: true  // スパースベクトルフラグ
     };
 }
 
-// ========== 類似度計算 ==========
+// ========== 類似度計算（スパースベクトル対応） ==========
 function cosineSimilarityAdvanced(vec1, vec2) {
+    // スパースベクトルの場合
+    if (vec1 instanceof Map && vec2 instanceof Map) {
+        let dotProduct = 0;
+        
+        // 小さい方のベクトルでループして効率化
+        const [smaller, larger] = vec1.size <= vec2.size ? [vec1, vec2] : [vec2, vec1];
+        
+        for (const [token, value1] of smaller) {
+            const value2 = larger.get(token);
+            if (value2 !== undefined) {
+                dotProduct += value1 * value2;
+            }
+        }
+        
+        return dotProduct; // 既にL2正規化済みなので内積が類似度
+    }
+    
+    // 従来の密ベクトルの場合
     return vec1.reduce((sum, a, i) => sum + a * vec2[i], 0);
 }
 
@@ -268,16 +375,22 @@ function searchJaccard(documents, query, topN) {
 
 function searchTFIDF(documents, query, topN, tokenizerFunction, algorithmName, useAdvanced = false, options = {}) {
     const startTime = Date.now();
+    console.log(`🎯 ${algorithmName} 検索開始...`);
     
     const docTexts = documents.map(doc => doc.text);
+    console.log(`📄 対象文書数: ${docTexts.length}`);
+    
     const tfidfData = computeTFIDFAdvanced(docTexts, query, tokenizerFunction, options);
     
     const results = [];
+    console.log('🔍 類似度計算中...');
     
     tfidfData.docVectors.forEach((docVector, index) => {
         const similarity = cosineSimilarityAdvanced(tfidfData.queryVector, docVector);
         
-        if (similarity > 0) {
+        console.log(`  文書${index + 1}: 類似度 ${similarity.toFixed(4)}`);
+        
+        if (similarity > 0.001) {  // 極小値フィルタリング
             results.push({
                 index: index + 1,
                 similarity: similarity,
@@ -287,6 +400,7 @@ function searchTFIDF(documents, query, topN, tokenizerFunction, algorithmName, u
     });
     
     results.sort((a, b) => b.similarity - a.similarity);
+    console.log(`✅ 検索完了: ${results.length}件のヒット`);
     
     return {
         results: results.slice(0, topN),
@@ -358,6 +472,7 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
         }
 
         // ファイル読み込み
+        console.log(`📂 ファイル読み込み開始: ${filePath}`);
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const documents = fileContent.split('\n')
             .filter(line => line.trim())
@@ -371,22 +486,28 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
         console.log(`📁 ファイル読み込み完了: ${documents.length}件の文書`);
         console.log(`🔍 検索クエリ: "${query}"`);
         console.log(`⚙️  アルゴリズム: ${algorithm}`);
+        console.log(`📊 上位${topN}件を表示`);
         console.log('');
 
         // アルゴリズム選択
         let searchResult;
+        console.log('🚀 検索アルゴリズム実行中...');
         
         switch (algorithm) {
             case 'simple':
+                console.log('🔍 簡易検索を実行中...');
                 searchResult = performSimpleSearch(documents, query, topN);
                 break;
             case 'jaccard':
+                console.log('🔍 Jaccard係数検索を実行中...');
                 searchResult = searchJaccard(documents, query, topN);
                 break;
             case 'tfidf_basic':
+                console.log('🔍 TF-IDF基本検索を実行中...');
                 searchResult = searchTFIDF(documents, query, topN, getTokensBasic, 'TF-IDF（基本）', false);
                 break;
             case 'tfidf_advanced':
+                console.log('🔍 TF-IDF高精度検索を実行中...');
                 searchResult = searchTFIDF(documents, query, topN, getTokensAdvanced, 'TF-IDF（高精度）', true, {
                     useStopwords: true,
                     katakanaWeight: 1.5,
@@ -394,6 +515,7 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
                 });
                 break;
             case 'tfidf_ultra':
+                console.log('🔍 TF-IDF Ultra検索を実行中...');
                 searchResult = searchTFIDF(documents, query, topN, getTokensAdvanced, 'TF-IDF（Ultra）', true, {
                     useStopwords: true,
                     katakanaWeight: 2.0,
