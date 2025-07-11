@@ -29,7 +29,14 @@ function handleInput(args) {
                 console.error('使用方法: node src/app.js search <ファイルパス> <クエリ> [件数]');
                 return;
             }
-            performSearch(args[1], args[2], 'tfidf_ultra', parseInt(args[3]) || 5);
+            performSearch(args[1], args[2], 'tfidf_ultra', parseInt(args[3]) || 5, true);
+            break;
+        case 'search-quiet':
+            if (args.length < 3) {
+                console.error('使用方法: node src/app.js search-quiet <ファイルパス> <クエリ> [件数]');
+                return;
+            }
+            performSearch(args[1], args[2], 'tfidf_ultra', parseInt(args[3]) || 5, false);
             break;
         case 'help':
         case '--help':
@@ -48,6 +55,7 @@ function showHelp() {
     console.log('');
     console.log('使用方法:');
     console.log('  node src/app.js search <ファイルパス> <クエリ> [件数]');
+    console.log('  node src/app.js search-quiet <ファイルパス> <クエリ> [件数]');
     console.log('');
     console.log('パラメータ:');
     console.log('  ファイルパス  - 検索対象の文書ファイル');
@@ -55,30 +63,37 @@ function showHelp() {
     console.log('  件数          - 表示する検索結果の数（デフォルト: 5）');
     console.log('');
     console.log('コマンド:');
-    console.log('  search    - TF-IDF（Ultra）アルゴリズムで文書検索を実行');
-    console.log('  help      - このヘルプを表示');
+    console.log('  search        - TF-IDF（Ultra）アルゴリズムで文書検索（詳細ログ有り）');
+    console.log('  search-quiet  - TF-IDF（Ultra）アルゴリズムで文書検索（簡易ログ）');
+    console.log('  help          - このヘルプを表示');
     console.log('');
     console.log('例:');
     console.log('  node src/app.js search data.txt "Python機械学習" 5');
-    console.log('  node src/app.js search ../data.txt "ライブラリを用いたPython"');
+    console.log('  node src/app.js search-quiet data.txt "ライブラリを用いたPython" 3');
+    console.log('');
+    console.log('推奨実行方法（メモリ効率化）:');
+    console.log('  npm run search data.txt "検索クエリ" 5');
+    console.log('  npm run search-quiet data.txt "検索クエリ" 5');
 }
 
 // ========== 前処理関数 ==========
-function preprocessTextAdvanced(text) {
-    console.log('🔄 前処理開始...');
-    console.log(`📝 元テキスト長: ${text.length}文字`);
+function preprocessTextAdvanced(text, verbose = true) {
+    if (verbose) console.log('🔄 前処理開始...');
+    if (verbose) console.log(`📝 元テキスト長: ${text.length}文字`);
     
     const cleaned = text.replace(/[^a-zA-Z0-9ぁ-んァ-ヶヷ-ヺー一-龥、。！？\s.,!?]/g, '')
                         .replace(/\s+/g, ' ')
                         .trim();
     
-    console.log(`✅ 前処理完了: ${cleaned.length}文字`);
+    if (verbose) console.log(`✅ 前処理完了: ${cleaned.length}文字`);
     return cleaned;
 }
 
 // ========== トークン化関数 ==========
 function getTokensAdvanced(text, options = {}) {
-    console.log('🔧 高精度トークン化開始...');
+    const verbose = options.verbose !== false;
+    
+    if (verbose) console.log('🔧 高精度トークン化開始...');
     
     const {
         useStopwords = true,
@@ -86,12 +101,12 @@ function getTokensAdvanced(text, options = {}) {
         englishWeight = 1.2
     } = options;
     
-    const clean = preprocessTextAdvanced(text);
+    const clean = preprocessTextAdvanced(text, verbose);
     const tokens = [];
     
     // 英単語（ストップワード除去オプション）
     const englishWords = clean.match(/\b[a-zA-Z]{2,}\b/g) || [];
-    console.log(`📝 英単語抽出: ${englishWords.length}個`);
+    if (verbose) console.log(`📝 英単語抽出: ${englishWords.length}個`);
     
     englishWords.forEach(word => {
         const lower = word.toLowerCase();
@@ -105,12 +120,12 @@ function getTokensAdvanced(text, options = {}) {
     
     // 数字（年号、バージョン等重要）
     const numbers = clean.match(/\d+/g) || [];
-    console.log(`🔢 数字抽出: ${numbers.length}個`);
+    if (verbose) console.log(`🔢 数字抽出: ${numbers.length}個`);
     tokens.push(...numbers);
     
     // カタカナ語（技術用語として重要度高）
     const katakanaWords = clean.match(/[ァ-ヶー]{2,}/g) || [];
-    console.log(`🈯 カタカナ語抽出: ${katakanaWords.length}個`);
+    if (verbose) console.log(`🈯 カタカナ語抽出: ${katakanaWords.length}個`);
     
     katakanaWords.forEach(word => {
         // カタカナ重み適用
@@ -121,7 +136,7 @@ function getTokensAdvanced(text, options = {}) {
     
     // 漢字列（意味のある単語として抽出）
     const kanjiSequences = clean.match(/[一-龥]{1,}/g) || [];
-    console.log(`🈴 漢字列抽出: ${kanjiSequences.length}個`);
+    if (verbose) console.log(`🈴 漢字列抽出: ${kanjiSequences.length}個`);
     
     kanjiSequences.forEach(seq => {
         if (!useStopwords || !STOPWORDS_JP.has(seq)) {
@@ -143,14 +158,14 @@ function getTokensAdvanced(text, options = {}) {
         }
     }
     
-    console.log(`📊 N-gram生成: ${ngramCount}個`);
-    console.log(`✅ トークン化完了: ${tokens.length}個のトークン`);
+    if (verbose) console.log(`📊 N-gram生成: ${ngramCount}個`);
+    if (verbose) console.log(`✅ トークン化完了: ${tokens.length}個のトークン`);
     
     return tokens;
 }
 
-function getTokensBasic(text) {
-    const clean = preprocessTextAdvanced(text);
+function getTokensBasic(text, verbose = false) {
+    const clean = preprocessTextAdvanced(text, verbose);
     const tokens = [];
     
     const englishWords = clean.match(/\b[a-zA-Z]+\b/g) || [];
@@ -169,38 +184,42 @@ function getTokensBasic(text) {
 // ========== TF-IDF計算 ==========
 function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {}) {
     const startTime = Date.now();
-    console.log('🧮 TF-IDF計算開始...');
+    const verbose = options.verbose !== false; // デフォルトでtrue
+    
+    if (verbose) console.log('🧮 TF-IDF計算開始...');
     
     const useL2Norm = options.useL2Norm !== false;
     const useImprovedIDF = options.useImprovedIDF !== false;
     
-    console.log(`📊 設定: L2正規化=${useL2Norm}, 改良IDF=${useImprovedIDF}`);
+    if (verbose) console.log(`📊 設定: L2正規化=${useL2Norm}, 改良IDF=${useImprovedIDF}`);
     
     // 全文書とクエリのトークン化
-    console.log('🔤 全文書のトークン化中...');
+    if (verbose) console.log('🔤 全文書のトークン化中...');
     const allTexts = [...documents, query];
     const allTokens = allTexts.map((text, index) => {
-        if (index === allTexts.length - 1) {
-            console.log('🔍 クエリのトークン化中...');
-        } else {
-            console.log(`📄 文書${index + 1}のトークン化中...`);
+        if (verbose) {
+            if (index === allTexts.length - 1) {
+                console.log('🔍 クエリのトークン化中...');
+            } else {
+                console.log(`📄 文書${index + 1}のトークン化中...`);
+            }
         }
         return tokenizerFunction(text, options);
     });
     
     // 語彙構築
-    console.log('📚 語彙構築中...');
+    if (verbose) console.log('📚 語彙構築中...');
     const vocabulary = [...new Set(allTokens.flat())];
     const vocabSize = vocabulary.length;
-    console.log(`✅ 語彙サイズ: ${vocabSize}`);
+    if (verbose) console.log(`✅ 語彙サイズ: ${vocabSize}`);
     
     // TF計算
-    console.log('📈 TF値計算中...');
+    if (verbose) console.log('📈 TF値計算中...');
     const tfidfVectors = allTokens.map((tokens, index) => {
         const tf = {};
         const totalTokens = tokens.length;
         
-        console.log(`  文書${index + 1}: ${totalTokens}トークン`);
+        if (verbose) console.log(`  文書${index + 1}: ${totalTokens}トークン`);
         
         tokens.forEach(token => {
             tf[token] = (tf[token] || 0) + 1;
@@ -217,7 +236,7 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
     });
     
     // IDF計算
-    console.log('📉 IDF値計算中...');
+    if (verbose) console.log('📉 IDF値計算中...');
     const idf = {};
     const docCount = allTexts.length;
     let processedTerms = 0;
@@ -225,19 +244,19 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
     // 最適化：Map を使用してDocumentFrequencyを計算
     const documentFrequency = new Map();
     
-    console.log('  文書頻度計算中...');
+    if (verbose) console.log('  文書頻度計算中...');
     allTokens.forEach((tokens, docIndex) => {
         const uniqueTokens = new Set(tokens);
         uniqueTokens.forEach(token => {
             documentFrequency.set(token, (documentFrequency.get(token) || 0) + 1);
         });
         
-        if (docIndex % 10 === 0) {
+        if (verbose && docIndex % 10 === 0) {
             console.log(`    文書進行状況: ${docIndex + 1}/${allTokens.length}`);
         }
     });
     
-    console.log('  IDF値計算中...');
+    if (verbose) console.log('  IDF値計算中...');
     vocabulary.forEach((token, index) => {
         const df = documentFrequency.get(token) || 1;
         
@@ -250,20 +269,20 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
         }
         
         processedTerms++;
-        if (processedTerms % 15000 === 0) {
+        if (verbose && processedTerms % 15000 === 0) {
             console.log(`    語彙進行状況: ${processedTerms}/${vocabulary.length}語 (${(processedTerms/vocabulary.length*100).toFixed(1)}%)`);
         }
     });
     
-    console.log('✅ IDF値計算完了');
+    if (verbose) console.log('✅ IDF値計算完了');
     
     // TF-IDFベクトル作成（メモリ効率化）
-    console.log('🔢 TF-IDFベクトル作成中...');
+    if (verbose) console.log('🔢 TF-IDFベクトル作成中...');
     const vectors = [];
     
     for (let docIndex = 0; docIndex < tfidfVectors.length; docIndex++) {
         const tf = tfidfVectors[docIndex];
-        console.log(`  文書${docIndex + 1}/${tfidfVectors.length}のベクトル作成中...`);
+        if (verbose) console.log(`  文書${docIndex + 1}/${tfidfVectors.length}のベクトル作成中...`);
         
         // スパースベクトル形式で作成（0でない値のみ保持）
         const sparseVector = new Map();
@@ -291,14 +310,14 @@ function computeTFIDFAdvanced(documents, query, tokenizerFunction, options = {})
         vectors.push(sparseVector);
         
         // メモリ使用量を定期的に報告
-        if (docIndex % 10 === 0) {
+        if (verbose && docIndex % 10 === 0) {
             const memUsage = process.memoryUsage();
             console.log(`    メモリ使用量: ${(memUsage.heapUsed / 1024 / 1024).toFixed(1)}MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(1)}MB`);
         }
     }
     
     const preprocessingTime = Date.now() - startTime;
-    console.log(`✅ TF-IDF計算完了: ${preprocessingTime}ms`);
+    if (verbose) console.log(`✅ TF-IDF計算完了: ${preprocessingTime}ms`);
     
     return {
         vectors: vectors,
@@ -375,20 +394,22 @@ function searchJaccard(documents, query, topN) {
 
 function searchTFIDF(documents, query, topN, tokenizerFunction, algorithmName, useAdvanced = false, options = {}) {
     const startTime = Date.now();
-    console.log(`🎯 ${algorithmName} 検索開始...`);
+    const verbose = options.verbose !== false; // デフォルトでtrue
+    
+    if (verbose) console.log(`🎯 ${algorithmName} 検索開始...`);
     
     const docTexts = documents.map(doc => doc.text);
-    console.log(`📄 対象文書数: ${docTexts.length}`);
+    if (verbose) console.log(`📄 対象文書数: ${docTexts.length}`);
     
     const tfidfData = computeTFIDFAdvanced(docTexts, query, tokenizerFunction, options);
     
     const results = [];
-    console.log('🔍 類似度計算中...');
+    if (verbose) console.log('🔍 類似度計算中...');
     
     tfidfData.docVectors.forEach((docVector, index) => {
         const similarity = cosineSimilarityAdvanced(tfidfData.queryVector, docVector);
         
-        console.log(`  文書${index + 1}: 類似度 ${similarity.toFixed(4)}`);
+        if (verbose) console.log(`  文書${index + 1}: 類似度 ${similarity.toFixed(4)}`);
         
         if (similarity > 0.001) {  // 極小値フィルタリング
             results.push({
@@ -400,7 +421,7 @@ function searchTFIDF(documents, query, topN, tokenizerFunction, algorithmName, u
     });
     
     results.sort((a, b) => b.similarity - a.similarity);
-    console.log(`✅ 検索完了: ${results.length}件のヒット`);
+    if (verbose) console.log(`✅ 検索完了: ${results.length}件のヒット`);
     
     return {
         results: results.slice(0, topN),
@@ -463,7 +484,7 @@ function calculateSimilarity(text, query) {
 }
 
 // ========== メイン検索実装 ==========
-function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
+function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5, verbose = true) {
     try {
         // ファイル存在確認
         if (!fs.existsSync(filePath)) {
@@ -487,6 +508,11 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
         console.log(`🔍 検索クエリ: "${query}"`);
         console.log(`⚙️  アルゴリズム: ${algorithm}`);
         console.log(`📊 上位${topN}件を表示`);
+        if (verbose) {
+            console.log(`📋 詳細ログ: ON`);
+        } else {
+            console.log(`📋 詳細ログ: OFF`);
+        }
         console.log('');
 
         // アルゴリズム選択
@@ -504,14 +530,15 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
                 break;
             case 'tfidf_basic':
                 console.log('🔍 TF-IDF基本検索を実行中...');
-                searchResult = searchTFIDF(documents, query, topN, getTokensBasic, 'TF-IDF（基本）', false);
+                searchResult = searchTFIDF(documents, query, topN, getTokensBasic, 'TF-IDF（基本）', false, { verbose });
                 break;
             case 'tfidf_advanced':
                 console.log('🔍 TF-IDF高精度検索を実行中...');
                 searchResult = searchTFIDF(documents, query, topN, getTokensAdvanced, 'TF-IDF（高精度）', true, {
                     useStopwords: true,
                     katakanaWeight: 1.5,
-                    englishWeight: 1.2
+                    englishWeight: 1.2,
+                    verbose
                 });
                 break;
             case 'tfidf_ultra':
@@ -521,7 +548,8 @@ function performSearch(filePath, query, algorithm = 'tfidf_ultra', topN = 5) {
                     katakanaWeight: 2.0,
                     englishWeight: 1.5,
                     useL2Norm: true,
-                    useImprovedIDF: true
+                    useImprovedIDF: true,
+                    verbose
                 });
                 break;
             default:

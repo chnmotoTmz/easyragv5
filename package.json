@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node --max-old-space-size=8192 src/app.js",
     "search": "node --max-old-space-size=8192 src/app.js search",
+    "search-quiet": "node --max-old-space-size=8192 src/app.js search-quiet",
     "dev": "node --max-old-space-size=8192 src/app.js"
   },
   "pkg": {
